@@ -1,65 +1,61 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const bot = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
-  ]
-});
-const fetch = require('node-fetch');
-const config = require('./config.json');
-const token = config.token;
-const prefix = config.prefix;
+const { Client, Intents, Collection } = require('discord.js');
+const { TOKEN, PREFIX } = require("./config.json")
+const bot = new Client({intents: [
+  Intents.FLAGS.GUILDS,
+  Intents.FLAGS.GUILD_MEMBERS,
+  Intents.FLAGS.GUILD_MESSAGES,
+  Intents.FLAGS.GUILD_PRESENCES
+]});
+const { parseString } = require('xml2js');
 
 const jokesAPI = 'https://official-joke-api.appspot.com/random_joke';
+const anekdotAPI = 'http://rzhunemogu.ru/RandJSON.aspx?CType=1';
 
 bot.on('ready', () => {
-  console.log(`Successfully launched -> ${bot.user.tag}!`);
-  bot.user.setPresence({
-    status: 'online',
-    activity: {
-      name: '-help',
-      type: 'PLAYING'
-    }
-  });
+  console.log(`Logged in as ${bot.user.tag}!`);
 });
 
-bot.on('messageCreate', async msg => {
-  if (msg.content.startsWith(prefix)) {
-    const args = msg.content
-      .slice(prefix.length)
-      .trim()
-      .split(/ +/g);
-    const command = args.shift().toLowerCase();
+bot.on('messageCreate', message => {
+  if (!message.content.startsWith(PREFIX) || message.author.bot) return;
+  const [command, ...args] = message.content.slice(PREFIX.length).trim().split(/ +/);
 
-    switch (command) {
-      case 'help':
-        msg.channel.send(`A bot telling jokes, enter the command '-joke' <-> Либо просто '-анекдот'`);
-        break;
-      case 'joke':
-        var response = await fetch(jokesAPI);
-        const joke = await response.json();
-        msg.channel.send(`**${joke.setup}**\n${joke.punchline}`);
-        break;
-      case 'анекдот':
-        var response = await fetch('https://www.anekdot.ru/random/anekdot/');
-        const html = await response.text();
-        const regexp = /<div class="text">(.+)<\/div>/s;
-        const match = html.match(regexp);
-        if (match) {
-          const anekdot = match[1]
-            .replace(/<br>/g, '\n')
-            .replace(/&quot;/g, '"')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>');
-          msg.channel.send(anekdot);
-        } else {
-          msg.channel.send('Не удалось получить анекдот :(');
-        }
-        break;
-    }
+  switch (command.toLowerCase()) {
+    case 'joke':
+      handleJokeCommand(message);
+      break;
+    case 'анекдот':
+      handleAnekdotCommand(message);
+      break;
+    case 'help':
+      handleHelpCommand(message);
+      break;
   }
 });
 
-bot.login(token);
+async function handleJokeCommand(message) {
+  const response = await fetch(jokesAPI);
+  const joke = await response.json(); 
+  message.channel.send(`**${joke.setup}**\n${joke.punchline}`);
+}
+
+async function handleAnekdotCommand(message) {
+  try {
+    const response = await fetch(anekdotAPI, {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Accept-Charset': 'utf-8'
+      }
+    });
+    const joke = await response.json(); 
+    message.channel.send(`**${joke.content}**`);
+  } catch (err) {
+      console.error(err);
+      message.channel.send('Произошла ошибка при получении анекдота :(');
+  }
+}
+
+async function handleHelpCommand(message) {
+  message.channel.send(`The command for issuing a joke -> !joke`);
+}
+
+bot.login(TOKEN);
