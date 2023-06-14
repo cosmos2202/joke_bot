@@ -1,4 +1,4 @@
-const { Client, Intents, Collection } = require('discord.js');
+const { Client, Intents } = require('discord.js');
 const { TOKEN, PREFIX } = require("./config.json")
 const bot = new Client({intents: [
   Intents.FLAGS.GUILDS,
@@ -6,13 +6,18 @@ const bot = new Client({intents: [
   Intents.FLAGS.GUILD_MESSAGES,
   Intents.FLAGS.GUILD_PRESENCES
 ]});
-const { parseString } = require('xml2js');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 const jokesAPI = 'https://official-joke-api.appspot.com/random_joke';
-const anekdotAPI = 'http://rzhunemogu.ru/RandJSON.aspx?CType=1';
+const anekdotAPI = 'https://www.anekdot.ru/random/anekdot/';
 
 bot.on('ready', () => {
   console.log(`Logged in as ${bot.user.tag}!`);
+  bot.user.setPresence({
+    activity: { name: '!help', type: 'PLAYING' },
+    status: 'online'
+  });
 });
 
 bot.on('messageCreate', message => {
@@ -40,22 +45,24 @@ async function handleJokeCommand(message) {
 
 async function handleAnekdotCommand(message) {
   try {
-    const response = await fetch(anekdotAPI, {
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Accept-Charset': 'utf-8'
-      }
-    });
-    const joke = await response.json(); 
-    message.channel.send(`**${joke.content}**`);
-  } catch (err) {
-      console.error(err);
-      message.channel.send('Произошла ошибка при получении анекдота :(');
-  }
+    const response = await axios.get(anekdotAPI);
+    const $ = cheerio.load(response.data);
+    const jokeTextElement = $('.topicbox').find('.text')[0];
+    let jokeText;
+    if (jokeTextElement) {
+      jokeText = $(jokeTextElement).text().trim();
+      message.channel.send(`${jokeText}`);
+    } else {
+       throw "Не удалось получить данные";
+     }
+   } catch (error) { 
+     console.error(error);
+     message.reply("Произошла ошибка при запросе данных.");
+   }
 }
 
 async function handleHelpCommand(message) {
-  message.channel.send(`The command for issuing a joke -> !joke`);
+  message.channel.send(`The command for issuing a joke -> !joke \nЕсли необходимы анекдоты на русском введите -> !анекдот`);
 }
 
 bot.login(TOKEN);
